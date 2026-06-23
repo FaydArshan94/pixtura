@@ -43,7 +43,11 @@ export const getMedia = async (req, res) => {
     res.set(
       "Content-Type",
       `image/${req.query.format || transformedImage.format}`,
+
     );
+    
+    res.set("Cache-Control", "public, max-age=31536000")
+    
     res.send(transformedImage.buffer);
   } catch (error) {
     console.error("Error retrieving file:", error);
