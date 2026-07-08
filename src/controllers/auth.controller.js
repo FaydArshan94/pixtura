@@ -97,8 +97,33 @@ export const generateApiKey = async (req, res) => {
       { new: true },
     );
 
-    res.status(200).json({ apiKey });
+    res.status(200).json({ apiKey, hasApiKey: true });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const User = await user.findById(req.user._id).select("-password +apiKey");
+    if (!User) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.status(200).json({
+      id: User._id,
+      email: User.email,
+      username: User.username,
+      hasApiKey: Boolean(User.apiKey),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const logoutUser = async (req, res) => {
+  const token = req.cookies.token;
+
+  res.clearCookie("token", {});
+  return res.status(200).json({ message: "Logout successful" });
 };

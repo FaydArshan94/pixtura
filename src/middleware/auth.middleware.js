@@ -38,8 +38,6 @@ export const validateApiKey = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  console.log("API Key:", apiKey);
-
   try {
     const hashedKey = crypto.createHash("sha256").update(apiKey).digest("hex");
 
@@ -53,7 +51,7 @@ export const validateApiKey = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Error validating API key:", error)
-    return res.status(401).json({ message: "Invalid API key" });
+    console.error("Error validating API key:", error);
+    return res.status(500).json({ message: "Error validating API key" });
   }
 };
