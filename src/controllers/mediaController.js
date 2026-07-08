@@ -145,7 +145,6 @@ export const moveMedia = async (req, res) => {
       return res.status(404).json({ message: "File not found" });
     }
 
-    console.log(newFolderId);
 
     if (newFolderId) {
       const folder = await Folder.findOne({
