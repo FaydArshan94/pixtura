@@ -30,7 +30,6 @@ export const signup = async (req, res) => {
       id: newUser._id,
       email: newUser.email,
       username: newUser.username,
-      token,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -70,9 +69,9 @@ export const login = async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 3600000,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7200000,
     });
 
     res.status(200).json({
