@@ -22,7 +22,7 @@ export const signup = async (req, res) => {
     });
 
     const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "2h",
     });
 
     res.status(201).json({
@@ -50,6 +50,7 @@ export const login = async (req, res) => {
     if (!password) {
       return res.status(400).json({ message: "Password is required." });
     }
+
     const User = await user
       .findOne({ $or: [{ email }, { username }] })
       .select("+password");
@@ -64,14 +65,14 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign({ userId: User._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "2h",
     });
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 3600000, // 1 hour
+      secure: true,
+      sameSite: "none",
+      maxAge: 7200000,
     });
 
     res.status(200).json({
