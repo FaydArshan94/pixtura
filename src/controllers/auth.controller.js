@@ -79,7 +79,7 @@ export const login = async (req, res) => {
       id: User._id,
       email: User.email,
       username: User.username,
-      token,
+
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -122,8 +122,10 @@ export const getMe = async (req, res) => {
 };
 
 export const logoutUser = async (req, res) => {
-  const token = req.cookies.token;
-
-  res.clearCookie("token", {});
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
   return res.status(200).json({ message: "Logout successful" });
 };
