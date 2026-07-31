@@ -12,6 +12,9 @@ const mediaSchema = new mongoose.Schema(
     originalName: {
       type: String,
     },
+    displayName: {
+      type: String,
+    },
     format: {
       type: String,
     },
@@ -27,8 +30,34 @@ const mediaSchema = new mongoose.Schema(
     url: {
       type: String,
     },
+    isPublic: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    folderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Folder",
+      default: null,
+    },
 
-    folderId: { type: mongoose.Schema.Types.ObjectId, ref: "Folder", default: null }
+    share: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      token: {
+        type: String,
+        default: null,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+    },
   },
   { timestamps: true },
 );

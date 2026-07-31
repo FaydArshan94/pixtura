@@ -1,6 +1,7 @@
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import s3Client from "../config/s3.js";
-
+import dotenv from "dotenv";
+dotenv.config();
 
 export const uploadFileToS3 = async (fileName, fileBuffer, mimeType) => {
     const command = new PutObjectCommand({

@@ -30,29 +30,27 @@ export const signup = async (req, res) => {
       id: newUser._id,
       email: newUser.email,
       username: newUser.username,
+      token: token,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
+    console.error("Error during signup:", error);
   }
 };
 
 export const login = async (req, res) => {
   try {
-    const { email, username, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!email && !username) {
-      return res
-        .status(400)
-        .json({ message: "Email or username is required." });
+    if (!email) {
+      return res.status(400).json({ message: "Emailis required." });
     }
 
     if (!password) {
       return res.status(400).json({ message: "Password is required." });
     }
 
-    const User = await user
-      .findOne({ $or: [{ email }, { username }] })
-      .select("+password");
+    const User = await user.findOne({ email }).select("+password");
     if (!User) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
@@ -68,9 +66,9 @@ export const login = async (req, res) => {
     });
 
     res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      // httpOnly: true,
+      // secure: true,
+      // sameSite: "none",
       maxAge: 7200000,
     });
 
@@ -80,7 +78,6 @@ export const login = async (req, res) => {
       email: User.email,
       username: User.username,
       token: token,
-
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -8,6 +8,29 @@ import sharp from "sharp";
 import { transform } from "../services/sharp.js";
 import Media from "../models/media.model.js";
 import Folder from "../models/folder.model.js";
+import crypto from "crypto";
+import { generateSignature, verifySignature } from "../utils/signature.js";
+
+const streamMedia = async (media, req, res) => {
+  const buffer = await getFileFromS3(media.s3Key);
+
+  if (!buffer) {
+    return res.status(404).json({
+      message: "File not found",
+    });
+  }
+
+  const transformedImage = await transform(buffer, req.query);
+
+  res.set(
+    "Content-Type",
+    `image/${req.query.format || transformedImage.format}`,
+  );
+
+  res.set("Cache-Control", "public, max-age=31536000");
+
+  return res.send(transformedImage.buffer);
+};
 
 export const uploadMedia = async (req, res) => {
   try {
@@ -27,6 +50,7 @@ export const uploadMedia = async (req, res) => {
       folderId: req.body.folderId || null,
       s3Key: fileName,
       originalName: req.file.originalname,
+      displayName: req.file.originalname,
       format: req.file.mimetype.split("/")[1],
       size: req.file.size,
       width: metdata.width,
@@ -34,18 +58,19 @@ export const uploadMedia = async (req, res) => {
       url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
     });
 
-
-    res.status(200).json({ message: "File uploaded successfully",
-        userId: req.user._id,
-        folderId: req.body.folderId || null,
-        s3Key: fileName,
-        originalName: req.file.originalname,
-        format: req.file.mimetype.split("/")[1],
-        size: req.file.size,
-        width: metdata.width,
-        height: metdata.height,
-        url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
-     });
+    res.status(200).json({
+      message: "File uploaded successfully",
+      userId: req.user._id,
+      folderId: req.body.folderId || null,
+      s3Key: fileName,
+      originalName: req.file.originalname,
+      displayName: req.file.originalname,
+      format: req.file.mimetype.split("/")[1],
+      size: req.file.size,
+      width: metdata.width,
+      height: metdata.height,
+      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
+    });
   } catch (error) {
     console.error("Error uploading file:", error);
     res
@@ -54,35 +79,91 @@ export const uploadMedia = async (req, res) => {
   }
 };
 
+
+
+
 export const getMedia = async (req, res) => {
   try {
     const { fileName } = req.params;
+    const { expires, signature } = req.query;
 
-    const buffer = await getFileFromS3(fileName);
+    const media = await Media.findOne({
+      s3Key: fileName,
+    });
 
-    if (!buffer) {
-      return res.status(404).json({ message: "File not found" });
+    if (!media) {
+      return res.status(404).json({
+        message: "File not found",
+      });
     }
 
-    const transformedImage = await transform(buffer, req.query);
+    if (media.isPublic) {
+      return streamMedia(media, req, res);
+    }
 
-    res.set(
-      "Content-Type",
-      `image/${req.query.format || transformedImage.format}`,
-    );
+    if (!expires || !signature) {
+      return res.status(403).json({
+        message: "This image is private",
+      });
+    }
 
-    res.set("Cache-Control", "public, max-age=31536000");
+    const currentTime = Math.floor(Date.now() / 1000);
 
-    res.send(transformedImage.buffer);
+    if (currentTime > Number(expires)) {
+      return res.status(403).json({
+        message: "Signed URL has expired",
+      });
+    }
+
+    const isValid = verifySignature(media.s3Key, expires, signature);
+
+    if (!isValid) {
+      return res.status(403).json({
+        message: "Invalid signature",
+      });
+    }
+
+    return streamMedia(media, req, res);
   } catch (error) {
     console.error("Error retrieving file:", error);
-    res
-      .status(500)
-      .json({ message: "Error retrieving file", error: error.message });
+
+    return res.status(500).json({
+      message: "Error retrieving file",
+      error: error.message,
+    });
   }
 };
 
 export const deleteMedia = async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const permanent = req.query.permanent === "true";
+
+    const image = await Media.findOne({ _id: fileId, userId: req.user._id });
+
+    if (!image) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    if (permanent) {
+      await deleteFileFromS3(image.s3Key);
+      await Media.deleteOne({ _id: fileId });
+      return res.status(200).json({ message: "File permanently deleted" });
+    }
+
+    image.deletedAt = new Date();
+    await image.save();
+
+    res.status(200).json({ message: "File moved to trash successfully" });
+  } catch (error) {
+    console.error("Error deleting file:", error);
+    res
+      .status(500)
+      .json({ message: "Error deleting file", error: error.message });
+  }
+};
+
+export const moveToTrash = async (req, res) => {
   try {
     const fileId = req.params.fileId;
 
@@ -92,10 +173,10 @@ export const deleteMedia = async (req, res) => {
       return res.status(404).json({ message: "File not found" });
     }
 
-    await deleteFileFromS3(image.s3Key);
-    await Media.deleteOne({ _id: fileId });
+    image.deletedAt = new Date();
+    await image.save();
 
-    res.status(200).json({ message: "File deleted successfully" });
+    res.status(200).json({ message: "File moved to trash successfully" });
   } catch (error) {
     console.error("Error deleting file:", error);
     res
@@ -104,9 +185,37 @@ export const deleteMedia = async (req, res) => {
   }
 };
 
+export const restoreMedia = async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+
+    const image = await Media.findOne({ _id: fileId, userId: req.user._id });
+
+    if (!image) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    image.deletedAt = null;
+    await image.save();
+
+    res.status(200).json({ message: "File restored successfully" });
+  } catch (error) {
+    console.error("Error restoring file:", error);
+    res
+      .status(500)
+      .json({ message: "Error restoring file", error: error.message });
+  }
+};
+
 export const getAllMedia = async (req, res) => {
   try {
-    const media = await Media.find({ userId: req.user._id });
+    const isTrashRoute = req.path === "/trash";
+    const query = {
+      userId: req.user._id,
+      deletedAt: isTrashRoute ? { $ne: null } : null,
+    };
+
+    const media = await Media.find(query).sort({ createdAt: -1 });
     res.status(200).json({ media });
   } catch (error) {
     console.error("Error retrieving media:", error);
@@ -137,7 +246,8 @@ export const getMediaById = async (req, res) => {
 export const moveMedia = async (req, res) => {
   try {
     const { fileId } = req.params;
-    const { newFolderId } = req.body;
+    const { folderId, newFolderId } = req.body;
+    const targetFolderId = folderId ?? newFolderId;
 
     const media = await Media.findOne({ _id: fileId, userId: req.user._id });
 
@@ -145,10 +255,9 @@ export const moveMedia = async (req, res) => {
       return res.status(404).json({ message: "File not found" });
     }
 
-
-    if (newFolderId) {
+    if (targetFolderId) {
       const folder = await Folder.findOne({
-        _id: newFolderId,
+        _id: targetFolderId,
         userId: req.user._id,
       });
 
@@ -157,7 +266,7 @@ export const moveMedia = async (req, res) => {
       }
     }
 
-    media.folderId = newFolderId || null;
+    media.folderId = targetFolderId || null;
     await media.save();
 
     res.status(200).json({ message: "File moved successfully", media });
@@ -166,5 +275,209 @@ export const moveMedia = async (req, res) => {
     res
       .status(500)
       .json({ message: "Error moving file", error: error.message });
+  }
+};
+
+export const renameMedia = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { displayName, newName } = req.body;
+    const nameToSet = displayName?.trim() || newName?.trim();
+
+    if (!nameToSet) {
+      return res.status(400).json({ message: "New file name is required." });
+    }
+
+    const updateMedia = await Media.findByIdAndUpdate(
+      { _id: fileId, userId: req.user._id },
+      { $set: { displayName: nameToSet } },
+      { new: true },
+    );
+
+    return res
+      .status(200)
+      .json({ message: "File renamed successfully", media: updateMedia });
+  } catch (error) {
+    console.error("Error renaming file:", error);
+    res
+      .status(500)
+      .json({ message: "Error renaming file", error: error.message });
+  }
+};
+
+export const updateVisibility = async (req, res) => {
+  const { fileId } = req.params;
+  const { isPublic } = req.body;
+
+  try {
+    const media = await Media.findOne({ _id: fileId, userId: req.user._id });
+
+    if (!media) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    media.isPublic = isPublic;
+    await media.save();
+
+    res
+      .status(200)
+      .json({ message: "File visibility updated successfully", media });
+  } catch (error) {
+    console.error("Error updating file visibility:", error);
+    res.status(500).json({
+      message: "Error updating file visibility",
+      error: error.message,
+    });
+  }
+};
+
+export const enableShare = async (req, res) => {
+  const { fileId } = req.params;
+
+  try {
+    const media = await Media.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    });
+
+    if (!media) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    if (media.share.enabled) {
+      return res.status(409).json({
+        message: "File is already being shared",
+        share: {
+          enabled: true,
+          token: media.share.token,
+          expiresAt: media.share.expiresAt,
+          url: `${process.env.APP_URL}/share/${media.share.token}`,
+        },
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    media.share.enabled = true;
+    media.share.token = token;
+    media.share.expiresAt = null;
+
+    await media.save();
+
+    return res.status(200).json({
+      message: "Share link created successfully",
+      share: {
+        enabled: true,
+        token,
+        expiresAt: null,
+        url: `${process.env.APP_URL}/share/${token}`,
+      },
+    });
+  } catch (error) {
+    console.error("Error enabling share:", error);
+
+    return res.status(500).json({
+      message: "Error enabling share",
+      error: error.message,
+    });
+  }
+};
+
+export const disableShare = async (req, res) => {
+  const { fileId } = req.params;
+
+  try {
+    const media = await Media.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    });
+
+    if (!media) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    media.share.enabled = false;
+    media.share.token = null;
+    media.share.expiresAt = null;
+
+    await media.save();
+
+    return res.status(200).json({
+      message: "Share disabled successfully",
+    });
+  } catch (error) {
+    console.error("Error disabling share:", error);
+
+    return res.status(500).json({
+      message: "Error disabling share",
+      error: error.message,
+    });
+  }
+};
+
+export const getSharedMedia = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const media = await Media.findOne({
+      "share.token": token,
+      "share.enabled": true,
+    });
+
+    if (!media) {
+      return res.status(404).json({
+        message: "Shared file not found",
+      });
+    }
+
+    if (media.share.expiresAt && new Date() > media.share.expiresAt) {
+      return res.status(410).json({
+        message: "Share link has expired",
+      });
+    }
+
+    return streamMedia(media, req, res);
+  } catch (error) {
+    console.error("Error retrieving shared media:", error);
+
+    return res.status(500).json({
+      message: "Error retrieving shared media",
+      error: error.message,
+    });
+  }
+};
+
+export const generateSignedUrl = async (req, res) => {
+  const { fileId } = req.params;
+  const { expiresIn = 300 } = req.body;
+
+  try {
+    const media = await Media.findOne({ _id: fileId, userId: req.user._id });
+
+    if (!media) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    const expires = Math.floor(Date.now() / 1000) + Number(expiresIn);
+
+    const signature = generateSignature(media.s3Key, expires);
+
+    const signedUrl = `${process.env.APP_URL}/api/media/cloud/${media.s3Key}?expires=${expires}&signature=${signature}`;
+
+    return res.status(200).json({
+      message: "Signed URL generated successfully",
+      signedUrl,
+      expiresAt: new Date(expires * 1000),
+    });
+  } catch {
+    console.error("Error generating signed URL:", error);
+    return res.status(500).json({
+      message: "Error generating signed URL",
+      error: error.message,
+    });
   }
 };
