@@ -5,6 +5,7 @@ const mediaSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
     },
 
     mediaType: {
@@ -19,18 +20,22 @@ const mediaSchema = new mongoose.Schema(
 
     s3Key: {
       type: String,
+      required: true,
     },
     originalName: {
       type: String,
+      required: true,
     },
     displayName: {
       type: String,
+      required: true,
     },
     format: {
       type: String,
     },
     size: {
       type: Number,
+      required: true,
     },
     width: {
       type: Number,
@@ -40,6 +45,7 @@ const mediaSchema = new mongoose.Schema(
     },
     url: {
       type: String,
+      required: true,
     },
     thumbnailUrl: {
       type: String,
@@ -95,5 +101,12 @@ const mediaSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+mediaSchema.index({ userId: 1 });
+mediaSchema.index({ folderId: 1 });
+mediaSchema.index({ "share.token": 1 });
+mediaSchema.index({ isPublic: 1 });
+mediaSchema.index({ deletedAt: 1 });
+
 const Media = mongoose.model("Media", mediaSchema);
+
 export default Media;

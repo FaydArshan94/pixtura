@@ -12,4 +12,8 @@ export const upload = multer({
       cb(new Error("Invalid file type"));
     }
   },
+
+  limits: {
+    fileSize: 500 * 1024 * 1024,
+  },
 });

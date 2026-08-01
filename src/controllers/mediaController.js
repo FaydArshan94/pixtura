@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { generateSignature, verifySignature } from "../utils/signature.js";
 import { processImageUpload } from "../services/imageUpload.js";
 import { processVideoUpload } from "../services/videoUpload.js";
+import { getStorageInsights as getStorageInsightsService } from "../services/storageInsightsService.js";
 
 const streamMedia = async (media, req, res) => {
   const buffer = await getFileFromS3(media.s3Key);
@@ -42,6 +43,12 @@ export const uploadMedia = async (req, res) => {
 
     const mediaType = req.file.mimetype.split("/")[0];
 
+    if (mediaType === "image" && req.file.size > 20 * 1024 * 1024) {
+      return res.status(400).json({
+        message: "Images cannot exceed 20 MB",
+      });
+    }
+
     if (mediaType === "image") {
       const media = await processImageUpload(
         req.file,
@@ -52,6 +59,12 @@ export const uploadMedia = async (req, res) => {
       return res.status(200).json({
         message: "File uploaded successfully",
         media,
+      });
+    }
+
+    if (mediaType === "video" && req.file.size > 500 * 1024 * 1024) {
+      return res.status(400).json({
+        message: "Videos cannot exceed 500 MB",
       });
     }
 
@@ -69,6 +82,7 @@ export const uploadMedia = async (req, res) => {
     }
   } catch (error) {
     console.error("Error uploading file:", error);
+
     res
       .status(500)
       .json({ message: "Error uploading file", error: error.message });
@@ -197,6 +211,20 @@ export const restoreMedia = async (req, res) => {
     res
       .status(500)
       .json({ message: "Error restoring file", error: error.message });
+  }
+};
+
+export const getStorageInsights = async (req, res) => {
+  try {
+    const insights = await getStorageInsightsService(req.user._id);
+
+    return res.status(200).json(insights);
+  } catch (error) {
+    console.error("Error retrieving storage insights:", error);
+    return res.status(500).json({
+      message: "Error retrieving storage insights",
+      error: error.message,
+    });
   }
 };
 

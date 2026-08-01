@@ -15,6 +15,7 @@ import {
   disableShare,
   getSharedMedia,
   generateSignedUrl,
+  getStorageInsights,
 } from "../controllers/mediaController.js";
 import { signup, login } from "../controllers/auth.controller.js";
 import {
@@ -44,6 +45,7 @@ router.delete("/:fileId/share", authMiddleware, disableShare);
 router.patch("/:fileId/trash", authMiddleware, moveToTrash);
 router.patch("/:fileId/restore", authMiddleware, restoreMedia);
 
+router.get("/storage-insights", authMiddleware, getStorageInsights);
 router.get("/trash", authMiddleware, getAllMedia);
 router.get("/", authMiddleware, getAllMedia);
 router.get("/:fileId", authMiddleware, getMediaById);

@@ -6,63 +6,83 @@ import { v4 as uuidv4 } from "uuid";
 import Media from "../models/media.model.js";
 import { uploadFileToS3 } from "../services/s3Service.js";
 import { getVideoMetadata, generateThumbnail } from "../utils/video.js";
+import { deleteFileFromS3 } from "../services/s3Service.js";
 
 export const processVideoUpload = async ({ file, userId, folderId }) => {
-  const uniqueId = uuidv4();
+  let tempDir;
+  let uploadedKeys = [];
 
-  const videoKey = `${uniqueId}-${file.originalname}`;
+  try {
+    const uniqueId = uuidv4();
 
-  const thumbnailKey = `${uniqueId}-thumbnail.jpg`;
+    const videoKey = `${uniqueId}-${file.originalname}`;
 
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pixtura-"));
+    const thumbnailKey = `${uniqueId}-thumbnail.jpg`;
 
-  const tempVideoPath = path.join(tempDir, file.originalname);
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pixtura-"));
 
-  await fs.writeFile(tempVideoPath, file.buffer);
+    const tempVideoPath = path.join(tempDir, file.originalname);
 
-  const metadata = await getVideoMetadata(tempVideoPath);
+    await fs.writeFile(tempVideoPath, file.buffer);
 
-  const thumbnailPath = await generateThumbnail(tempVideoPath, tempDir);
+    const metadata = await getVideoMetadata(tempVideoPath);
 
-  const thumbnailBuffer = await fs.readFile(thumbnailPath);
+    const thumbnailPath = await generateThumbnail(tempVideoPath, tempDir);
 
-  await uploadFileToS3(videoKey, file.buffer, file.mimetype);
+    const thumbnailBuffer = await fs.readFile(thumbnailPath);
 
-  await uploadFileToS3(thumbnailKey, thumbnailBuffer, "image/jpeg");
+    await uploadFileToS3(videoKey, file.buffer, file.mimetype);
 
-  const media = await Media.create({
-    userId,
-    folderId,
+    uploadedKeys.push(videoKey);
 
-    mediaType: "video",
+    await uploadFileToS3(thumbnailKey, thumbnailBuffer, "image/jpeg");
 
-    mimetype: file.mimetype,
+    uploadedKeys.push(thumbnailKey);
 
-    s3Key: videoKey,
+    const media = await Media.create({
+      userId,
+      folderId,
 
-    originalName: file.originalname,
-    displayName: file.originalname,
+      mediaType: "video",
 
-    size: file.size,
+      mimetype: file.mimetype,
 
-    width: metadata.width,
-    height: metadata.height,
+      s3Key: videoKey,
 
-    url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${videoKey}`,
+      originalName: file.originalname,
+      displayName: file.originalname,
 
-    thumbnailUrl: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${thumbnailKey}`,
+      size: file.size,
 
-    videoMetadata: {
-      duration: metadata.duration,
-      fps: metadata.fps,
-      videoCodec: metadata.codec,
-    },
-  });
+      width: metadata.width,
+      height: metadata.height,
 
-  return media;
+      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${videoKey}`,
 
-  await fs.rm(tempDir, {
-    recursive: true,
-    force: true,
-  });
+      thumbnailUrl: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${thumbnailKey}`,
+
+      videoMetadata: {
+        duration: metadata.duration,
+        fps: metadata.fps,
+        videoCodec: metadata.codec,
+      },
+    });
+
+    return media;
+  } catch (error) {
+    for (const key of uploadedKeys) {
+      try {
+        await deleteFileFromS3(key);
+      } catch (err) {
+        console.error("Rollback failed:", key);
+      }
+    }
+
+    console.error("Error processing video upload:", error);
+    throw error;
+  } finally {
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  }
 };
