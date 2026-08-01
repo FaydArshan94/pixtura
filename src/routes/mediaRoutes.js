@@ -16,6 +16,7 @@ import {
   getSharedMedia,
   generateSignedUrl,
   getStorageInsights,
+  bulkMoveToTrash,
 } from "../controllers/mediaController.js";
 import { signup, login } from "../controllers/auth.controller.js";
 import {
@@ -37,9 +38,8 @@ router.post("/:fileId/sign", authMiddleware, generateSignedUrl);
 
 router.patch("/update/:fileId", authMiddleware, moveMedia);
 router.patch("/:fileId/move", authMiddleware, moveMedia);
-
+router.patch("/bulk/trash", authMiddleware, bulkMoveToTrash);
 router.delete("/delete/:fileId", authMiddleware, deleteMedia);
-router.delete("/:fileId/share", authMiddleware, disableShare);
 
 // router.delete("/:fileId", authMiddleware, deleteMedia);
 router.patch("/:fileId/trash", authMiddleware, moveToTrash);
@@ -48,11 +48,15 @@ router.patch("/:fileId/restore", authMiddleware, restoreMedia);
 router.get("/storage-insights", authMiddleware, getStorageInsights);
 router.get("/trash", authMiddleware, getAllMedia);
 router.get("/", authMiddleware, getAllMedia);
+router.get("/share/:token", getSharedMedia);
 router.get("/:fileId", authMiddleware, getMediaById);
 router.get("/cloud/:fileName", getMedia);
-router.get("/share/:token", getSharedMedia);
+
+
 router.patch("/rename/:fileId", authMiddleware, renameMedia);
 router.patch("/:fileId/visibility", authMiddleware, updateVisibility);
+router.patch("/:fileId/share/enable", authMiddleware, enableShare);
+router.patch("/:fileId/share/disable", authMiddleware, disableShare);
 router.patch("/:fileId/share", authMiddleware, enableShare);
 
 export default router;

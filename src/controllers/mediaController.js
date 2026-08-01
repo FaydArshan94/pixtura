@@ -13,6 +13,7 @@ import { generateSignature, verifySignature } from "../utils/signature.js";
 import { processImageUpload } from "../services/imageUpload.js";
 import { processVideoUpload } from "../services/videoUpload.js";
 import { getStorageInsights as getStorageInsightsService } from "../services/storageInsightsService.js";
+import { bulkMoveToTrashService } from "../services/bulkMediaService.js";
 
 const streamMedia = async (media, req, res) => {
   const buffer = await getFileFromS3(media.s3Key);
@@ -368,13 +369,15 @@ export const enableShare = async (req, res) => {
     }
 
     if (media.share.enabled) {
-      return res.status(409).json({
+      return res.status(200).json({
         message: "File is already being shared",
+        shareUrl: `${process.env.APP_URL}/share/${media.share.token}`,
+        expiresAt: media.share.expiresAt,
         share: {
           enabled: true,
           token: media.share.token,
           expiresAt: media.share.expiresAt,
-          url: `${process.env.APP_URL}/share/${media.share.token}`,
+          url: `${process.env.APP_URL}/api/media/share/${media.share.token}`,
         },
       });
     }
@@ -389,11 +392,13 @@ export const enableShare = async (req, res) => {
 
     return res.status(200).json({
       message: "Share link created successfully",
+      shareUrl: `${process.env.APP_URL}/api/media/share/${token}`,
+      expiresAt: null,
       share: {
         enabled: true,
         token,
         expiresAt: null,
-        url: `${process.env.APP_URL}/share/${token}`,
+        url: `${process.env.APP_URL}/api/media/share/${token}`,
       },
     });
   } catch (error) {
@@ -429,6 +434,8 @@ export const disableShare = async (req, res) => {
 
     return res.status(200).json({
       message: "Share disabled successfully",
+      shareUrl: null,
+      expiresAt: null,
     });
   } catch (error) {
     console.error("Error disabling share:", error);
@@ -498,6 +505,36 @@ export const generateSignedUrl = async (req, res) => {
     console.error("Error generating signed URL:", error);
     return res.status(500).json({
       message: "Error generating signed URL",
+      error: error.message,
+    });
+  }
+};
+
+
+export const bulkMoveToTrash = async (req, res) => {
+  try {
+    const { fileIds } = req.body;
+
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({
+        message: "Please provide at least one file.",
+      });
+    }
+
+    const result = await bulkMoveToTrashService(
+      fileIds,
+      req.user._id
+    );
+
+    return res.status(200).json({
+      message: "Files moved to trash successfully.",
+      ...result,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error moving files to trash.",
       error: error.message,
     });
   }
