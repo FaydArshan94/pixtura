@@ -6,6 +6,17 @@ const mediaSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+
+    mediaType: {
+      type: String,
+      enum: ["image", "video", "audio"],
+      required: true,
+    },
+    mimetype: {
+      type: String,
+      required: true,
+    },
+
     s3Key: {
       type: String,
     },
@@ -30,6 +41,28 @@ const mediaSchema = new mongoose.Schema(
     url: {
       type: String,
     },
+    thumbnailUrl: {
+      type: String,
+    },
+
+    videoMetadata: {
+      duration: {
+        type: Number,
+      },
+      bitrate: {
+        type: Number,
+      },
+      videoCodec: {
+        type: String,
+      },
+      audioCodec: {
+        type: String,
+      },
+      fps: {
+        type: Number,
+      },
+    },
+
     isPublic: {
       type: Boolean,
       default: false,

@@ -1,13 +1,15 @@
 import multer from "multer";
 
 export const upload = multer({
-    storage: multer.memoryStorage(),
+  storage: multer.memoryStorage(),
 
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith("image/")) {
-            cb(null, true);
-        } else {
-            cb(new Error("Invalid file type"), false);
-        }
-    },
+  fileFilter: (req, file, cb) => {
+    const mediaType = file.mimetype.split("/")[0];
+
+    if (["image", "video", "audio"].includes(mediaType)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type"));
+    }
+  },
 });

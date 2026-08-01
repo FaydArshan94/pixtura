@@ -10,6 +10,8 @@ import Media from "../models/media.model.js";
 import Folder from "../models/folder.model.js";
 import crypto from "crypto";
 import { generateSignature, verifySignature } from "../utils/signature.js";
+import { processImageUpload } from "../services/imageUpload.js";
+import { processVideoUpload } from "../services/videoUpload.js";
 
 const streamMedia = async (media, req, res) => {
   const buffer = await getFileFromS3(media.s3Key);
@@ -38,39 +40,33 @@ export const uploadMedia = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const uniqueId = uuidv4();
-    const fileName = `${uniqueId}-${req.file.originalname}`;
+    const mediaType = req.file.mimetype.split("/")[0];
 
-    await uploadFileToS3(fileName, req.file.buffer, req.file.mimetype);
+    if (mediaType === "image") {
+      const media = await processImageUpload(
+        req.file,
+        req.user._id,
+        req.body.folderId || null,
+      );
 
-    const metdata = await sharp(req.file.buffer).metadata();
+      return res.status(200).json({
+        message: "File uploaded successfully",
+        media,
+      });
+    }
 
-    await Media.create({
-      userId: req.user._id,
-      folderId: req.body.folderId || null,
-      s3Key: fileName,
-      originalName: req.file.originalname,
-      displayName: req.file.originalname,
-      format: req.file.mimetype.split("/")[1],
-      size: req.file.size,
-      width: metdata.width,
-      height: metdata.height,
-      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
-    });
+    if (mediaType === "video") {
+      const media = await processVideoUpload({
+        file: req.file,
+        userId: req.user._id,
+        folderId: req.body.folderId || null,
+      });
 
-    res.status(200).json({
-      message: "File uploaded successfully",
-      userId: req.user._id,
-      folderId: req.body.folderId || null,
-      s3Key: fileName,
-      originalName: req.file.originalname,
-      displayName: req.file.originalname,
-      format: req.file.mimetype.split("/")[1],
-      size: req.file.size,
-      width: metdata.width,
-      height: metdata.height,
-      url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
-    });
+      return res.status(200).json({
+        message: "File uploaded successfully",
+        media,
+      });
+    }
   } catch (error) {
     console.error("Error uploading file:", error);
     res
@@ -78,9 +74,6 @@ export const uploadMedia = async (req, res) => {
       .json({ message: "Error uploading file", error: error.message });
   }
 };
-
-
-
 
 export const getMedia = async (req, res) => {
   try {
