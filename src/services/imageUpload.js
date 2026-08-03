@@ -39,6 +39,7 @@ export const processImageUpload = async (file, userId, folderId) => {
       height: metadata.height,
 
       url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`,
+      cdnUrl: `https://${process.env.AWS_CLOUDFRONT_URL}/${fileName}`,
     });
 
     return media;
