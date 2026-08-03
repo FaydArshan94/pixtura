@@ -17,6 +17,7 @@ import {
   generateSignedUrl,
   getStorageInsights,
   bulkMoveToTrash,
+  getMediaByCdn,
 } from "../controllers/mediaController.js";
 import { signup, login } from "../controllers/auth.controller.js";
 import {
@@ -51,6 +52,7 @@ router.get("/", authMiddleware, getAllMedia);
 router.get("/share/:token", getSharedMedia);
 router.get("/:fileId", authMiddleware, getMediaById);
 router.get("/cloud/:fileName", getMedia);
+
 
 
 router.patch("/rename/:fileId", authMiddleware, renameMedia);

@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { uploadFileToS3 } from "../services/s3Service.js";
 import Media from "../models/media.model.js";
 import { deleteFileFromS3 } from "../services/s3Service.js";
+import { nanoid } from "nanoid";
 
 export const processImageUpload = async (file, userId, folderId) => {
   let uploadedKeys = [];
@@ -25,7 +26,10 @@ export const processImageUpload = async (file, userId, folderId) => {
 
     const metadata = await sharp(buffer).metadata();
 
+    const publicId = nanoid(12);
+
     const media = await Media.create({
+      publicId,
       userId,
       mediaType: "image",
       mimetype: uploadFile.mimetype,

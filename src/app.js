@@ -1,5 +1,6 @@
 import express from "express";
 import mediaRoutes from "./routes/mediaRoutes.js";
+import cdnRoutes from "./routes/cdnRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import cookieParser from "cookie-parser";
@@ -21,6 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/media", mediaRoutes);
+app.use("/cdn", cdnRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/folders", folderRoutes);
 

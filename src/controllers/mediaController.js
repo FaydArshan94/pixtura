@@ -14,6 +14,7 @@ import { processImageUpload } from "../services/imageUpload.js";
 import { processVideoUpload } from "../services/videoUpload.js";
 import { getStorageInsights as getStorageInsightsService } from "../services/storageInsightsService.js";
 import { bulkMoveToTrashService } from "../services/bulkMediaService.js";
+import { streamMediaCdn } from "../services/streamMedia.js";
 
 const streamMedia = async (media, req, res) => {
   const buffer = await getFileFromS3(media.s3Key);
@@ -138,6 +139,43 @@ export const getMedia = async (req, res) => {
     return res.status(500).json({
       message: "Error retrieving file",
       error: error.message,
+    });
+  }
+};
+
+export const getMediaByCdn = async (req, res) => {
+  try {
+    const { publicId } = req.params;
+
+    if (!publicId) {
+      return res.status(400).json({ message: "Public ID is required" });
+    }
+
+    const { stream, contentType, contentLength, etag, lastModified } =
+      await streamMediaCdn(publicId);
+
+    res.setHeader("Content-Type", contentType);
+
+    if (contentLength) {
+      res.setHeader("Content-Length", contentLength);
+    }
+
+    if (etag) {
+      res.setHeader("ETag", etag);
+    }
+
+    if (lastModified) {
+      res.setHeader("Last-Modified", lastModified.toUTCString());
+    }
+
+    // We'll change this later when CloudFront is the origin
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+    stream.pipe(res);
+  } catch (error) {
+    console.error(error);
+    res.status(404).json({
+      message: error.message,
     });
   }
 };
@@ -510,7 +548,6 @@ export const generateSignedUrl = async (req, res) => {
   }
 };
 
-
 export const bulkMoveToTrash = async (req, res) => {
   try {
     const { fileIds } = req.body;
@@ -521,10 +558,7 @@ export const bulkMoveToTrash = async (req, res) => {
       });
     }
 
-    const result = await bulkMoveToTrashService(
-      fileIds,
-      req.user._id
-    );
+    const result = await bulkMoveToTrashService(fileIds, req.user._id);
 
     return res.status(200).json({
       message: "Files moved to trash successfully.",

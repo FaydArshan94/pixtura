@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const mediaSchema = new mongoose.Schema(
   {
+    publicId: {
+      type: String,
+      unique: true,
+      required: true,
+    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
