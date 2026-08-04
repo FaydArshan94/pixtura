@@ -8,8 +8,8 @@ export const getMediaByCdn = async (req, res) => {
       return res.status(400).json({ message: "Public ID is required" });
     }
 
-    const { w } = req.query;
-
+    const { w, h, fit, format, q } = req.query;
+    
     const { buffer, contentType, contentLength, etag, lastModified } =
       await streamMediaCdn(publicId, {
         width: w,
