@@ -1,5 +1,5 @@
 import express from "express";
-import { getMediaByCdn } from "../controllers/mediaController.js";
+import { getMediaByCdn } from "../controllers/cdn.controller.js";
 
 const router = express.Router();
 

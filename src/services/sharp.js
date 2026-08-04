@@ -1,46 +1,98 @@
 import sharp from "sharp";
 
-const formats = ["jpeg", "png", "webp", "avif"];
+const SUPPORTED_FORMATS = ["jpeg", "png", "webp", "avif"];
 
-export async function transform(buffer, params) {
-  const { w, h, format, quality, fit } = params;
+const SUPPORTED_FITS = [
+  "cover",
+  "contain",
+  "fill",
+  "inside",
+  "outside",
+];
 
-  // Validate format if provided
-  if (format && !formats.includes(format)) {
+export async function transform(buffer, options = {}) {
+  const {
+    width,
+    height,
+    format,
+    quality,
+    fit = "inside",
+  } = options;
+
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error("Invalid image buffer");
+  }
+
+  // Validate format
+  if (format && !SUPPORTED_FORMATS.includes(format)) {
     throw new Error(
-      `Invalid image format: ${format}. Supported formats are: ${formats.join(", ")}`,
+      `Unsupported format "${format}". Supported formats: ${SUPPORTED_FORMATS.join(", ")}`
     );
   }
+
+  // Validate fit
+  if (fit && !SUPPORTED_FITS.includes(fit)) {
+    throw new Error(
+      `Unsupported fit "${fit}". Supported fits: ${SUPPORTED_FITS.join(", ")}`
+    );
+  }
+
+  // Validate quality
+  const q =
+    quality !== undefined
+      ? Math.min(100, Math.max(1, Number(quality)))
+      : undefined;
 
   const metadata = await sharp(buffer).metadata();
 
   let pipeline = sharp(buffer);
 
-  if (w || h) {
+  // Resize
+  if (width || height) {
     pipeline = pipeline.resize({
-      width: w ? parseInt(w) : null,
-      height: h ? parseInt(h) : null,
-      fit: fit || "inside",
+      width: width ? Number(width) : undefined,
+      height: height ? Number(height) : undefined,
+      fit,
       withoutEnlargement: true,
     });
   }
 
-  if (format === "webp")
-    pipeline = pipeline.webp({ quality: quality ? parseInt(quality) : 80 });
-  else if (format === "avif")
-    pipeline = pipeline.avif({ quality: quality ? parseInt(quality) : 70 });
-  else if (format === "jpeg")
-    pipeline = pipeline.jpeg({ quality: quality ? parseInt(quality) : 85 });
-  else if (format === "png") pipeline = pipeline.png();
-  else {
-    // If no format is specified, use the original format
-    pipeline = pipeline.toFormat(metadata.format, {
-      quality: quality ? parseInt(quality) : 85,
-    });
+  // Format Conversion
+  switch (format || metadata.format) {
+    case "jpeg":
+      pipeline = pipeline.jpeg({
+        quality: q ?? 85,
+      });
+      break;
+
+    case "png":
+      pipeline = pipeline.png();
+      break;
+
+    case "webp":
+      pipeline = pipeline.webp({
+        quality: q ?? 80,
+      });
+      break;
+
+    case "avif":
+      pipeline = pipeline.avif({
+        quality: q ?? 70,
+      });
+      break;
+
+    default:
+      // Fallback for unsupported original formats
+      pipeline = pipeline.jpeg({
+        quality: q ?? 85,
+      });
+      break;
   }
 
+  const outputBuffer = await pipeline.toBuffer();
+
   return {
-    buffer: await pipeline.toBuffer(),
-    format: format || metadata.format,
+    buffer: outputBuffer,
+    contentType: `image/${format || metadata.format || "jpeg"}`,
   };
 }
