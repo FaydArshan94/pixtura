@@ -14,7 +14,10 @@ export const streamMediaCdn = async (publicId, options = {}) => {
   }
 
   // Original image from S3
-  const buffer = await getFileFromS3(media.s3Key);
+  const s3Object = await getFileFromS3(media.s3Key);
+
+  const byteArray = await s3Object.Body.transformToByteArray();
+  const buffer = Buffer.from(byteArray);
 
   // Check if any transformation is requested
   const hasTransformations =
@@ -27,10 +30,10 @@ export const streamMediaCdn = async (publicId, options = {}) => {
   if (!hasTransformations) {
     return {
       buffer,
-      contentType: media.mimeType,
+      contentType: s3Object.ContentType,
       contentLength: buffer.length,
-      etag: media.etag,
-      lastModified: media.updatedAt,
+      etag: s3Object.ETag?.replace(/"/g, ""),
+      lastModified: s3Object.LastModified,
     };
   }
 
