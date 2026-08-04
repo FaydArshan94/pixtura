@@ -1,4 +1,5 @@
 import { streamMediaCdn } from "../services/cdn/streamMedia.js";
+import { parseTransformations } from "../utils/parseTransformations.js";
 
 export const getMediaByCdn = async (req, res) => {
   try {
