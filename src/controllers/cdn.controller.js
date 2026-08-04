@@ -9,15 +9,12 @@ export const getMediaByCdn = async (req, res) => {
     }
 
     const { w, h, fit, format, q } = req.query;
-    
+
+
+    const options = parseTransformations(req.params.transformations);
+
     const { buffer, contentType, contentLength, etag, lastModified } =
-      await streamMediaCdn(publicId, {
-        width: w,
-        height: h,
-        fit,
-        format,
-        quality: q,
-      });
+      await streamMediaCdn(publicId, options);
 
     res.setHeader("Content-Type", contentType);
 
